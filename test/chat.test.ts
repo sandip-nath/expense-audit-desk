@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Desk, csv } from '../src/desk.ts';
 import { plan, validateQuery, validDate } from '../src/planner.ts';
 test('chat reports corrected weekly totals, single-day expenses, and receipt outage recovery', async () => {
-  const d = new Desk(); const s = d.create();
+  const d = new Desk(plan); const s = d.create();
   const audit = await d.chat(s.id, 'Audit Alex from 2026-10-01 to 2026-10-07');
   assert.match(audit.text, /6 expenses\. Known USD total: \$769\.00\. Policy-eligible: \$574\.00/);
   const hotel = await d.chat(s.id, 'Explain E103');
@@ -22,7 +22,7 @@ test('chat reports corrected weekly totals, single-day expenses, and receipt out
   assert.equal(recovered.report!.eligibleUsdMinor, 5000); assert.equal(recovered.report!.complete, true);
 });
 test('chat retains employee/date scope across category and receipt follow-ups', async () => {
-  const d = new Desk(); const s = d.create();
+  const d = new Desk(plan); const s = d.create();
   await d.chat(s.id, 'Audit Blair from 2026-10-01 to 2026-10-09');
   await d.chat(s.id, 'Only meals');
   const r = await d.chat(s.id, 'Show receipts');
@@ -31,17 +31,17 @@ test('chat retains employee/date scope across category and receipt follow-ups', 
   await d.chat(s.id, 'All categories'); assert.equal(s.query.category, null);
 });
 test('help and policy do not change conversation scope', async () => {
-  const d = new Desk(); const s = d.create(); const before = structuredClone(s.query);
+  const d = new Desk(plan); const s = d.create(); const before = structuredClone(s.query);
   assert.match((await d.chat(s.id, 'hello')).text, /I can/);
   assert.match((await d.chat(s.id, 'Show policy')).text, /per night/);
   assert.deepEqual(s.query, before);
 });
 test('explicit selections invalidate the last report', async () => {
-  const d = new Desk(); const s = d.create(); await d.chat(s.id, 'Audit Alex'); assert.ok(s.report);
+  const d = new Desk(plan); const s = d.create(); await d.chat(s.id, 'Audit Alex'); assert.ok(s.report);
   d.select(s.id, { employee: 'blair' }); assert.equal(s.report, null);
 });
 test('ambiguous employee requests and invalid dates do not mutate state', async () => {
-  const d = new Desk(); const s = d.create(); const before = structuredClone(s.query);
+  const d = new Desk(plan); const s = d.create(); const before = structuredClone(s.query);
   await assert.rejects(d.chat(s.id, 'Audit Alex and Blair'), /one employee/);
   await assert.rejects(d.chat(s.id, 'Audit Alex from 2026-10-10 to 2026-10-01'), /valid employee/);
   assert.deepEqual(s.query, before); assert.equal(validDate('2026-02-30'), false);
@@ -51,9 +51,39 @@ test('the planner supports explanations and rejects multiple category filters', 
   assert.equal(plan('Explain E103').expenseId, 'E103'); assert.throws(() => plan('Only meals and lodging'), /one category/);
 });
 test('CSV contains row evidence and stable column headers', async () => {
-  const d = new Desk(); const s = d.create(); const r = await d.chat(s.id, 'Audit Alex');
+  const d = new Desk(plan); const s = d.create(); const r = await d.chat(s.id, 'Audit Alex');
   const text = csv(r.report!); assert.match(text, /"original_minor","currency","usd_minor"/); assert.match(text, /"E101"/);
 });
 test('separate sessions retain separate scopes', async () => {
-  const d = new Desk(); const a = d.create(), b = d.create(); await d.chat(a.id, 'Audit Blair'); assert.equal(b.query.employee, 'alex');
+  const d = new Desk(plan); const a = d.create(), b = d.create(); await d.chat(a.id, 'Audit Blair'); assert.equal(b.query.employee, 'alex');
+});
+
+
+test('category policy shows only the requested cap and preserves audit scope and report', async () => {
+  const d = new Desk(plan); const s = d.create();
+  await d.chat(s.id, 'Audit Blair from 2026-10-01 to 2026-10-07 only transport');
+  const before = structuredClone(s.query); const report = s.report;
+  for (const [category, limit, basis] of [
+    ['meals', '$60.00', 'per expense'], ['transport', '$100.00', 'per expense'],
+    ['lodging', '$200.00', 'per night'], ['equipment', '$1000.00', 'per expense'],
+  ]) {
+    const result = await d.chat(s.id, `Show policy for ${category}`);
+    assert.ok(result.text.includes(`${category} ${limit} ${basis}`));
+    assert.match(result.text, /Receipt required at or above \$25\.00 USD/);
+    for (const other of ['meals', 'transport', 'lodging', 'equipment'].filter(c => c !== category)) {
+      assert.equal(result.text.includes(other), false);
+    }
+    assert.deepEqual(s.query, before); assert.equal(s.report, report);
+  }
+  const all = await d.chat(s.id, 'Show policy');
+  for (const category of ['meals', 'transport', 'lodging', 'equipment']) assert.ok(all.text.includes(category));
+  assert.deepEqual(s.query, before);
+});
+
+test('policy aliases support one category and ambiguous requests preserve state', async () => {
+  assert.equal(plan('lodging rules').policyCategory, 'lodging');
+  assert.equal(plan('meals limits').policyCategory, 'meals');
+  const d = new Desk(plan); const s = d.create(); const before = structuredClone(s.query);
+  await assert.rejects(d.chat(s.id, 'Show policy for meals and lodging'), /one category/);
+  assert.deepEqual(s.query, before);
 });

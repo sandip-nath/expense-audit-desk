@@ -63,7 +63,7 @@ The browser also provides explicit employee, date, and category selectors. Click
 
 Supported employees: Alex and Blair. Categories: meals, transport, lodging, equipment. Dates use YYYY-MM-DD. A single date selects that day. Date ranges include both endpoints. Category filters persist until changed or cleared with “All categories”. Employee changes preserve the selected dates and category.
 
-**The default chat planner is deterministic, not an LLM.** It recognizes documented intents and extracts employee names, dates, category filters, and expense IDs. Tool calls execute asynchronously against local simulated services; responses are calculated from returned records. This is not an unrestricted natural-language assistant. There is no live-model adapter in this exercise: external provider setup is outside scope. Diagnose application/data correctness using the included planner and services.
+**The default chat adapter is Offline, using deterministic parsing.** It recognizes documented intents and extracts employee names, dates, category filters, and expense IDs. Tool calls execute asynchronously against local simulated services; responses are calculated from returned records. This is not an unrestricted natural-language assistant. An optional OpenAI planner adapter is available; see the setup section below. Diagnose application/data correctness using the included planner and services.
 
 Supported intents: audit/reconcile/summary/total, expense list, exceptions, receipts, explanation by expense ID, policy, and help. Unknown requests return help. Natural-language date expressions, comparisons between employees, arbitrary advice, receipt uploads, and payment operations are outside scope.
 
@@ -161,3 +161,56 @@ Use your preferred coding agent. Review its hypotheses and changes, and be ready
 | test/ | Unit, integration, chat and HTTP acceptance tests |
 
 Native Node.js executes the erasable TypeScript syntax. No compiler or static checking dependencies are bundled. Adding type checking is an optional separate improvement. Authentication, durable storage, arbitrary-language reasoning, hosted deployment, real expense import, and actual financial actions are outside scope.
+
+
+## Optional OpenAI planner
+
+Select Offline (default) or OpenAI LLM in the browser’s Chat adapter selector. Selection belongs to each conversation and does not change audit filters. New chat uses the server default. The CLI supports `/planner offline|openai`.
+
+To configure direct OpenAI, set these server-side
+PowerShell environment variables before starting the browser server or CLI:
+
+```powershell
+$env:PLANNER_MODE = "openai"
+$env:OPENAI_API_KEY = "your-api-key"
+$env:OPENAI_MODEL = "gpt-4o-mini"
+mise exec -- npm start
+# Or: mise exec -- npm run chat
+```
+
+Restart the server after changing these settings and refresh the browser.
+API usage may incur provider charges. Never put the key in browser code or commit it.
+The app does not automatically load .env files. Clear the mode with
+`$env:PLANNER_MODE = "offline"` to restore deterministic parsing.
+
+The adapter uses the OpenAI Responses API with strict structured output and local
+validation. It sends the current message, selected scope, and up to six recent chat
+messages (each capped at 2,000 characters) to OpenAI; recent replies can contain
+expense evidence. It does not send credentials to the browser. Calculations, service
+calls, policy assessment, and final report text remain in local code. The planner
+has a 20-second request timeout and surfaces errors instead of silently switching
+interpretation modes. No API key is needed for the mocked adapter tests.
+
+Reference: https://developers.openai.com/api/docs/guides/structured-outputs
+
+
+
+### Debugging LLM requests
+
+The browser Execution trace and CLI `/trace` include `llm_plan` events for each
+model call: adapter/model, correlation ID, provider request ID, HTTP status,
+response status, bounded raw model output (up to 16,000 characters), validated
+intent, elapsed time, and the precise validation failure. Failed requests keep
+these events; the error message includes a correlation ID to find them.
+Raw outputs can contain expense information. Traces live in conversation memory
+and reset when the server restarts; authorization headers and API keys are never
+recorded, and occurrences of the configured API key in model output are redacted.
+
+For JSON diagnostic events in the server terminal as well, set
+`$env:LLM_DEBUG = "1"` before starting the app. This also includes the current input
+in debug events. Leave it unset for browser/CLI traces only. No log file is created.
+
+If the model returns help for an exact documented command such as `Show receipts`
+or `Only meals`, the adapter recovers that command using the deterministic parser.
+Both the model intent and correction are recorded in `llm_plan` events. This
+recovery does not apply to provider errors, invalid output, or arbitrary requests.

@@ -9,5 +9,5 @@ export type Trace = { at: number; name: string; phase: 'start' | 'result' | 'err
 export type Row = { expense: Expense; usdMinor: number | null; receipt: Receipt; state: 'eligible' | 'exception' | 'needs-review'; reasons: string[] };
 export type Report = { query: Query; rows: Row[]; knownTotalUsdMinor: number; eligibleUsdMinor: number; complete: boolean; warnings: string[]; policyVersion: string };
 export type Message = { role: 'user' | 'assistant'; content: string };
-export type Session = { id: string; query: Query; history: Message[]; trace: Trace[]; report: Report | null };
-export type Intent = { action: 'help' | 'list' | 'audit' | 'exceptions' | 'receipts' | 'explain' | 'policy'; patch: Partial<Query>; expenseId?: string };
+export type Session = { plannerMode: 'offline' | 'openai'; id: string; query: Query; history: Message[]; trace: Trace[]; report: Report | null };
+export type Intent = { action: 'help' | 'list' | 'audit' | 'exceptions' | 'receipts' | 'explain' | 'policy'; patch: Partial<Query>; expenseId?: string; policyCategory?: Category };

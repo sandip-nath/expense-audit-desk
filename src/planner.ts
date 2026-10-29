@@ -1,6 +1,6 @@
 import { employees, categories } from './data.ts';
 import type { Intent, Query } from './types.ts';
-export const help = 'I can list expenses, audit a claim, show exceptions or receipts, explain an expense, and show policy. Try “Audit Alex from 2026-10-01 to 2026-10-07”, then “Only meals”, “Show exceptions”, or “Explain E103”. “All categories” clears the category filter. Use the sidebar to select exact dates and employee.';
+export const help = 'I can list expenses, audit a claim, show exceptions or receipts, explain an expense, and show policy (for example, “Show policy for meals”). Try “Audit Alex from 2026-10-01 to 2026-10-07”, then “Only meals”, “Show exceptions”, or “Explain E103”. “All categories” clears the category filter. Use the sidebar to select exact dates and employee.';
 export function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }
@@ -24,7 +24,7 @@ export function plan(text: string): Intent {
   else if (matched.length) patch.category = matched[0];
   const id = lower.match(/\be\d{3}\b/)?.[0]?.toUpperCase();
   if (/\b(help|hello|hi)\b|what can you/.test(lower)) return { action: 'help', patch: {} };
-  if (/policy|limits|rules/.test(lower)) return { action: 'policy', patch: {} };
+  if (/policy|limits|rules/.test(lower)) return { action: 'policy', patch: {}, policyCategory: patch.category ?? undefined };
   if (/explain|details/.test(lower) && id) return { action: 'explain', patch, expenseId: id };
   if (/exceptions|flagged|violations/.test(lower)) return { action: 'exceptions', patch };
   if (/receipt/.test(lower)) return { action: 'receipts', patch };
