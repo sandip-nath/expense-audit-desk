@@ -1,0 +1,13 @@
+export type Currency = 'USD' | 'EUR' | 'GBP';
+export type Category = 'meals' | 'transport' | 'lodging' | 'equipment';
+export type Query = { employee: string; start: string; end: string; category: Category | null };
+export type Expense = { id: string; employee: string; date: string; merchant: string; category: Category; amountMinor: number; currency: Currency; nights?: number };
+export type Receipt = { status: 'present' | 'missing' | 'unavailable'; reference?: string };
+export type Rate = { currency: Currency; numerator: number; denominator: number; meaning: 'USD major units per source major unit' };
+export type Policy = { version: string; capsUsdMinor: Record<Category, number>; receiptRequiredFromUsdMinor: number; lodgingCapBasis: 'per-night' };
+export type Trace = { at: number; name: string; phase: 'start' | 'result' | 'error'; detail: unknown; durationMs?: number };
+export type Row = { expense: Expense; usdMinor: number | null; receipt: Receipt; state: 'eligible' | 'exception' | 'needs-review'; reasons: string[] };
+export type Report = { query: Query; rows: Row[]; knownTotalUsdMinor: number; eligibleUsdMinor: number; complete: boolean; warnings: string[]; policyVersion: string };
+export type Message = { role: 'user' | 'assistant'; content: string };
+export type Session = { id: string; query: Query; history: Message[]; trace: Trace[]; report: Report | null };
+export type Intent = { action: 'help' | 'list' | 'audit' | 'exceptions' | 'receipts' | 'explain' | 'policy'; patch: Partial<Query>; expenseId?: string };
